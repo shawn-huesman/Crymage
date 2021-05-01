@@ -2,6 +2,7 @@ from PIL import Image
 import os
 from functools import lru_cache
 
+
 class Cipher:
 
     def __init__(self, *, in_url: str):
@@ -23,19 +24,25 @@ class Cipher:
     def decode_caesar(self, key: int):
         self._transcode("caesar", decode=True, credentials=[key])
 
-    def encode_multiplicative(self, xkey: int, ykey:int):
+    def encode_multiplicative(self, xkey: int, ykey: int):
         self._transcode("multiplicative", decode=False, credentials=[xkey, ykey])
 
-    def decode_multiplicative(self, xkey: int, ykey:int):
+    def decode_multiplicative(self, xkey: int, ykey: int):
         self._transcode("multiplicative", decode=True, credentials=[xkey, ykey])
 
+    def encode_affine(self, xkey: int, ykey: int, shift_key: int):
+        self._transcode("affine", decode=False, credentials=[xkey, ykey, shift_key])
+
+    def decode_affine(self, xkey: int, ykey: int, shift_key: int):
+        self._transcode("affine", decode=True, credentials=[xkey, ykey, shift_key])
+
     def _transcode(self, cipher_name: str, *, decode: bool, credentials: list):
-        available_ciphers = ["caesar", "multiplicative"]
+        available_ciphers = ["caesar", "multiplicative", "affine"]
 
         if cipher_name not in available_ciphers:
             raise ValueError("Not a valid cipher name. Valid cipher names include: " + str(available_ciphers))
 
-        if cipher_name == "multiplicative":
+        if cipher_name == "multiplicative" or cipher_name == "affine":
             mult_inverse_table_x = self._calculate_multiplicative_keys(self.xres)
             mult_inverse_table_y = self._calculate_multiplicative_keys(self.yres)
 
@@ -69,6 +76,22 @@ class Cipher:
                     else:
                         shift_index_i = (i * xkey) % self.xres
                         shift_index_j = (j * ykey) % self.yres
+
+                elif cipher_name == "affine":
+                    xkey = credentials[0]
+                    ykey = credentials[1]
+                    shift_key = credentials[2]
+                    if xkey not in mult_inverse_table_x:
+                        raise ValueError("Key not valid for x resolution range 0-" + str(self.xres))
+                    if ykey not in mult_inverse_table_y:
+                        raise ValueError("Key not valid for y resolution range 0-" + str(self.yres))
+
+                    if decode:
+                        shift_index_i = (mult_inverse_table_x[xkey] * (i - shift_key)) % self.xres
+                        shift_index_j = (mult_inverse_table_y[ykey] * (j - shift_key)) % self.yres
+                    else:
+                        shift_index_i = ((i * xkey) + shift_key) % self.xres
+                        shift_index_j = ((j * ykey) + shift_key) % self.yres
 
                 self.pixel_array[i, j] = self.pixel_array_copy[shift_index_i, shift_index_j]
         self.img.save(self._create_dir(is_decoding=True if decode else False))
@@ -122,4 +145,3 @@ class Cipher:
         os.makedirs(img_dir, exist_ok=True)
         return_dir = img_dir + '\\' + img_filename
         return return_dir
-
