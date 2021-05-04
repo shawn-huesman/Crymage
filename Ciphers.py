@@ -36,15 +36,21 @@ class Cipher:
     def decode_affine(self, xkey: int, ykey: int, shift_key: int):
         self._transcode("affine", decode=True, credentials=[xkey, ykey, shift_key])
 
+    def encode_vigenere(self, keyword: str):
+        self._transcode("vigenere", decode=False, credentials=[keyword])
+
+    def decode_vigenere(self, keyword: str):
+        self._transcode("vigenere", decode=True, credentials=[keyword])
+
     def _transcode(self, cipher_name: str, *, decode: bool, credentials: list):
-        available_ciphers = ["caesar", "multiplicative", "affine"]
+        available_ciphers = ["caesar", "multiplicative", "affine", "vigenere"]
 
         if cipher_name not in available_ciphers:
             raise ValueError("Not a valid cipher name. Valid cipher names include: " + str(available_ciphers))
 
         if cipher_name == "multiplicative" or cipher_name == "affine":
-            mult_inverse_table_x = self._calculate_multiplicative_keys(self.xres)
-            mult_inverse_table_y = self._calculate_multiplicative_keys(self.yres)
+            mult_inverse_table_x = self.calculate_multiplicative_keys(self.xres)
+            mult_inverse_table_y = self.calculate_multiplicative_keys(self.yres)
 
         for i in range(0, self.xres):
             for j in range(0, self.yres):
@@ -93,11 +99,34 @@ class Cipher:
                         shift_index_i = ((i * xkey) + shift_key) % self.xres
                         shift_index_j = ((j * ykey) + shift_key) % self.yres
 
+                elif cipher_name == "vigenere":
+                    keyword = credentials[0]
+                    xkeyword = self.create_extended_keyword(self, keyword, self.xres)
+                    ykeyword = self.create_extended_keyword(self, keyword, self.yres)
+
+                    xkey = ord(xkeyword[i]) - 96
+                    ykey = ord(ykeyword[j]) - 96
+
+                    if decode:
+                        shift_index_i = (i + abs(self.xres - xkey)) % self.xres
+                        shift_index_j = (j + abs(self.yres - ykey)) % self.yres
+
+                    else:  # encoding caesar
+                        shift_index_i = (i + xkey) % self.xres
+                        shift_index_j = (j + ykey) % self.yres
+
                 self.pixel_array[i, j] = self.pixel_array_copy[shift_index_i, shift_index_j]
         self.img.save(self._create_dir(is_decoding=True if decode else False))
 
     @staticmethod
-    def _calculate_multiplicative_keys(upper_alphabet_bound: int):
+    def create_extended_keyword(self, keyword, length):
+        pre_keyword = "".join(str.lower(keyword).split())
+        keyword = "".join([i for i in pre_keyword if i.isalpha()])
+        repeated_keyword = keyword * length
+        return repeated_keyword[0:length]
+
+    @staticmethod
+    def calculate_multiplicative_keys(upper_alphabet_bound: int):
         """
         :param upper_alphabet_bound: alphabet is range (0, upper_alphabet_bound) (i.e xres of image is 1920, therefore
         the alphabet of the image is 0-1919 (1920 pixels). For this example, upper alphabet bound = 1920
